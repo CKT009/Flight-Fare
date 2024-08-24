@@ -23,7 +23,7 @@ class TrainPipeline:
             # Step 2: Data Transformation
             logging.info("Step 2: Data Transformation")
             data_transformation = DataTransformation()
-            transformed_train_data_path, transformed_test_data_path = data_transformation.initiate_data_transformation(
+            transformed_train_data_path, transformed_test_data_path, _ = data_transformation.initiate_data_transformation(
                 train_data_path, test_data_path
             )
 

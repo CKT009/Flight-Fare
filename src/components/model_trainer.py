@@ -77,6 +77,8 @@ class ModelTrainer:
             best_model = models[best_model_name]
 
             logging.info(f"Best model selected: {best_model_name} with R2: {performance_df.loc[best_model_name, 'R2']}")
+            print(f"best model name {best_model_name} and R2 score: {performance_df.loc[best_model_name, 'R2']}")
+
 
             # Save the best model
             os.makedirs(os.path.dirname(self.trainer_config.trained_model_file_path), exist_ok=True)

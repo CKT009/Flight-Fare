@@ -2,16 +2,19 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import os
 import sys
+import joblib  # Import joblib to save the scaler
 from src.logger import logging
 from src.exception import customexception
 from dataclasses import dataclass
 from src.components.data_ingestion import DataIngestion
-import re
+
 
 @dataclass
 class DataTransformationConfig:
     transformed_train_data_path: str = os.path.join("artifacts", "transformed_train.csv")
     transformed_test_data_path: str = os.path.join("artifacts", "transformed_test.csv")
+    preprocessor_obj_path: str = os.path.join("artifacts", "preprocessor.pkl")  # Path to save the preprocessor
+
 
 class DataTransformation:
     def __init__(self):
@@ -27,20 +30,14 @@ class DataTransformation:
             logging.info("Loaded train and test data for transformation")
 
             # Feature Engineering
-            
             # Drop rows with missing values
             train_df.dropna(inplace=True)
             test_df.dropna(inplace=True)
             logging.info("Dropped rows with missing values")
-            logging.info(f"total length of train: {len(train_df)}")
             
-            # Drop 'Route' column as it's not needed
-            train_df.drop(['Route'], axis=1, inplace=True)
-            test_df.drop(['Route'], axis=1, inplace=True)
-
-            # Handle 'Additional_Info' column by dropping it as it's not needed
-            train_df.drop(['Additional_Info'], axis=1, inplace=True)
-            test_df.drop(['Additional_Info'], axis=1, inplace=True)
+            # Drop 'Route' and 'Additional_Info' columns
+            train_df.drop(['Route', 'Additional_Info'], axis=1, inplace=True)
+            test_df.drop(['Route', 'Additional_Info'], axis=1, inplace=True)
 
             # Extract day, month from Date_of_Journey
             train_df['Journey_Day'] = pd.to_datetime(train_df['Date_of_Journey'], format='%d/%m/%Y').dt.day
@@ -48,11 +45,11 @@ class DataTransformation:
             test_df['Journey_Day'] = pd.to_datetime(test_df['Date_of_Journey'], format='%d/%m/%Y').dt.day
             test_df['Journey_Month'] = pd.to_datetime(test_df['Date_of_Journey'], format='%d/%m/%Y').dt.month
             
-            # Drop the 'Date_of_Journey' column as it's now redundant
+            # Drop the 'Date_of_Journey' column
             train_df.drop(['Date_of_Journey'], axis=1, inplace=True)
             test_df.drop(['Date_of_Journey'], axis=1, inplace=True)
 
-            # Use 'Duration' directly instead of extracting hours and minutes
+            # Convert 'Duration' to minutes
             def convert_to_minutes(duration):
                 try:
                     hours = 0
@@ -69,17 +66,17 @@ class DataTransformation:
             train_df['Duration'] = train_df['Duration'].apply(convert_to_minutes)
             test_df['Duration'] = test_df['Duration'].apply(convert_to_minutes)
             
-            # Drop 'Departure_Time' and 'Arrival_Time' columns
+            # Drop 'Dep_Time' and 'Arrival_Time' columns
             train_df.drop(['Dep_Time', 'Arrival_Time'], axis=1, inplace=True)
             test_df.drop(['Dep_Time', 'Arrival_Time'], axis=1, inplace=True)
 
-            # Handle 'Total_Stops' as numeric value
+            # Handle 'Total_Stops' as a numeric value
             train_df['Total_Stops'] = train_df['Total_Stops'].replace({'non-stop': 0, '1 stop': 1, '2 stops': 2, '3 stops': 3, '4 stops': 4})
             test_df['Total_Stops'] = test_df['Total_Stops'].replace({'non-stop': 0, '1 stop': 1, '2 stops': 2, '3 stops': 3, '4 stops': 4})
 
             # Handle categorical features using pd.get_dummies
             categorical_features = ['Airline', 'Source', 'Destination']
-
+            
             # Train data
             Airline_train = pd.get_dummies(train_df[['Airline']], drop_first=True, dtype=int)
             Source_train = pd.get_dummies(train_df[['Source']], drop_first=True, dtype=int)
@@ -102,14 +99,18 @@ class DataTransformation:
             # Combine encoded features with original features
             train_df = pd.concat([train_df.drop(categorical_features, axis=1), Airline_train, Source_train, Destination_train], axis=1)
             test_df = pd.concat([test_df.drop(categorical_features, axis=1), Airline_test, Source_test, Destination_test], axis=1)
-            logging.info(f"total nan values: {train_df.isna().sum()}")
 
             # Standardizing the numerical features
             scaler = StandardScaler()
             numerical_features = ['Duration', 'Journey_Day', 'Journey_Month', 'Total_Stops']
             train_df[numerical_features] = scaler.fit_transform(train_df[numerical_features])
             test_df[numerical_features] = scaler.transform(test_df[numerical_features])
-            logging.info(f"{train_df.sample(3)}")
+            
+            # Save the scaler (preprocessor)
+            os.makedirs(os.path.dirname(self.transformation_config.preprocessor_obj_path), exist_ok=True)
+            joblib.dump(scaler, self.transformation_config.preprocessor_obj_path)
+            logging.info("Preprocessor (scaler) saved successfully")
+
             # Save transformed data
             os.makedirs(os.path.dirname(self.transformation_config.transformed_train_data_path), exist_ok=True)
             train_df.to_csv(self.transformation_config.transformed_train_data_path, index=False)
@@ -118,7 +119,8 @@ class DataTransformation:
 
             return (
                 self.transformation_config.transformed_train_data_path,
-                self.transformation_config.transformed_test_data_path
+                self.transformation_config.transformed_test_data_path,
+                self.transformation_config.preprocessor_obj_path
             )
         
         except Exception as e:

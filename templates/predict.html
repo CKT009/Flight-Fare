@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flight Fare Prediction</title>
+</head>
+<body>
+    <h1>Predict Flight Fare</h1>
+    <form action="/predict" method="POST">
+        <!-- Airline -->
+        <label for="airline">Airline:</label>
+        <select id="airline" name="airline" required>
+            <option value="IndiGo">IndiGo</option>
+            <option value="Air India">Air India</option>
+            <option value="Jet Airways">Jet Airways</option>
+            <option value="SpiceJet">SpiceJet</option>
+            <option value="Multiple carriers">Multiple carriers</option>
+            <!-- Add other airlines as needed -->
+        </select><br><br>
+
+        <!-- Date of Journey -->
+        <label for="date_of_journey">Date of Journey:</label>
+        <input type="date" id="date_of_journey" name="date_of_journey" required><br><br>
+
+        <!-- Source -->
+        <label for="source">Source:</label>
+        <select id="source" name="source" required>
+            <option value="Banglore">Banglore</option>
+            <option value="Kolkata">Kolkata</option>
+            <option value="Delhi">Delhi</option>
+            <option value="Chennai">Chennai</option>
+            <!-- Add other sources as needed -->
+        </select><br><br>
+
+        <!-- Destination -->
+        <label for="destination">Destination:</label>
+        <select id="destination" name="destination" required>
+            <option value="New Delhi">New Delhi</option>
+            <option value="Banglore">Banglore</option>
+            <option value="Cochin">Cochin</option>
+            <option value="Kolkata">Kolkata</option>
+            <!-- Add other destinations as needed -->
+        </select><br><br>
+
+        <!-- Duration -->
+        <label for="duration">Duration (in minutes):</label>
+        <input type="number" id="duration" name="duration" min="0" required><br><br>
+
+        <!-- Total Stops -->
+        <label for="total_stops">Total Stops:</label>
+        <select id="total_stops" name="total_stops" required>
+            <option value="0">non-stop</option>
+            <option value="1">1 stop</option>
+            <option value="2">2 stops</option>
+            <option value="3">3 stops</option>
+            <option value="4">4 stops</option>
+        </select><br><br>
+
+        <input type="submit" value="Predict">
+    </form>
+</body>
+</html>
