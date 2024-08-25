@@ -7,6 +7,7 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from xgboost import XGBRegressor
+from sklearn.model_selection import GridSearchCV
 from dataclasses import dataclass
 from src.logger import logging
 from src.exception import customexception
@@ -22,6 +23,21 @@ class ModelTrainerConfig:
 class ModelTrainer:
     def __init__(self):
         self.trainer_config = ModelTrainerConfig()
+
+    def fine_tune_model(self, model, X_train, y_train):
+        # Define hyperparameters for tuning
+        param_grid = {
+            'n_estimators': [100, 200, 500],
+            'max_depth': [3, 5, 7],
+            'learning_rate': [0.01, 0.1, 0.2]
+        }
+        
+        # Initialize GridSearchCV for XGBoost model
+        grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, scoring='r2')
+        grid_search.fit(X_train, y_train)
+        logging.info(f"Best parameters for XGBoost: {grid_search.best_params_}")
+
+        return grid_search.best_estimator_
 
     def initiate_model_training(self, train_data_path: str, test_data_path: str):
         logging.info("Model training started")
@@ -45,7 +61,7 @@ class ModelTrainer:
                 "XGBoost": XGBRegressor(objective='reg:squarederror')
             }
 
-            model_performance = {}
+            model_performance = []
 
             # Train and evaluate models
             for model_name, model in models.items():
@@ -60,26 +76,28 @@ class ModelTrainer:
                 rmse = np.sqrt(mse)
                 r2 = r2_score(y_test, y_pred)
 
-                model_performance[model_name] = {
+                # Append model performance
+                model_performance.append({
+                    "Model": model_name,
                     "RMSE": rmse,
                     "R2": r2
-                }
+                })
 
                 logging.info(f"{model_name} - RMSE: {rmse}, R2: {r2}")
 
-            # Convert model performance to DataFrame and save to CSV
-            performance_df = pd.DataFrame(model_performance).T
+            performance_df = pd.DataFrame(model_performance)
             os.makedirs(os.path.dirname(self.trainer_config.model_scores_file_path), exist_ok=True)
-            performance_df.to_csv(self.trainer_config.model_scores_file_path)
+            performance_df.to_csv(self.trainer_config.model_scores_file_path, index=False)  # Ensure 'Model' column is saved
 
-            # Select the best model
-            best_model_name = performance_df['R2'].idxmax()
+            best_model_name = performance_df.loc[performance_df['R2'].idxmax(), 'Model']
             best_model = models[best_model_name]
 
-            logging.info(f"Best model selected: {best_model_name} with R2: {performance_df.loc[best_model_name, 'R2']}")
-            print(f"best model name {best_model_name} and R2 score: {performance_df.loc[best_model_name, 'R2']}")
+            logging.info(f"Best model selected: {best_model_name} with R2: {performance_df.loc[performance_df['R2'].idxmax(), 'R2']}")
+            print(f"Best model name: {best_model_name} and R2 score: {performance_df.loc[performance_df['R2'].idxmax(), 'R2']}")
 
-
+            if best_model_name == "XGBoost":
+                best_model = self.fine_tune_model(best_model, X_train, y_train)
+                
             # Save the best model
             os.makedirs(os.path.dirname(self.trainer_config.trained_model_file_path), exist_ok=True)
             joblib.dump(best_model, self.trainer_config.trained_model_file_path)
@@ -91,10 +109,3 @@ class ModelTrainer:
         except Exception as e:
             logging.error("Exception occurred in initiate_model_training")
             raise customexception(e, sys)
-
-if __name__ == "__main__":
-    data_transformation = DataTransformation()
-    train_data_path, test_data_path = DataIngestion().initiate_data_ingestion()
-    transformed_train_data_path, transformed_test_data_path = data_transformation.initiate_data_transformation(train_data_path, test_data_path)
-    model_trainer = ModelTrainer()
-    model_trainer.initiate_model_training(transformed_train_data_path, transformed_test_data_path)

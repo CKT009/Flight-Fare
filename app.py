@@ -11,19 +11,19 @@ logging.basicConfig(level=logging.INFO)
 
 @app.route("/")
 def home():
-    return jsonify({"message": "Welcome to the Home Page"})
+    return render_template("home.html")
 
 @app.route('/train')
 def start_training():
-    logging.info("Received POST request at /train")
+    logging.info("Received request at /train")
     try:
         # Instantiate the pipeline
         pipeline = TrainPipeline()
 
-        # Run the training pipeline
-        pipeline.run_pipeline()
+        # Run the training pipeline and get the model scores and best model info
+        model_scores, best_model_name = pipeline.run_pipeline()
 
-        return jsonify({"message": "Training pipeline executed successfully."}), 200
+        return render_template("train.html", model_scores=model_scores, best_model_name=best_model_name)
 
     except customexception as e:
         logging.error(f"CustomException occurred: {e}")
@@ -32,6 +32,7 @@ def start_training():
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
         return jsonify({"error": "An unexpected error occurred. Please check the logs for details."}), 500
+
 
 @app.route('/predict', methods=['GET', 'POST'])
 def predict():
@@ -44,30 +45,31 @@ def predict():
 
             # Get input data from form
             input_data = {
-                "airline": request.form.get("airline"),
+                "Airline": request.form.get("airline"),
                 "date_of_journey": request.form.get("date_of_journey"),
-                "source": request.form.get("source"),
-                "destination": request.form.get("destination"),
-                "duration": float(request.form.get("duration")),
-                "total_stops": request.form.get("total_stops")
+                "Source": request.form.get("source"),
+                "Destination": request.form.get("destination"),
+                "Duration": float(request.form.get("duration")),
+                "Total_Stops": request.form.get("total_stops")
             }
 
             # Perform prediction
             result = prediction_pipeline.predict(input_data)
 
-            return jsonify({"prediction": result.tolist()}), 200
+            # Pass the prediction result to the template
+            return render_template("predict.html", prediction=result.tolist()[0])
 
         except customexception as e:
             logging.error(f"CustomException occurred: {e}")
-            return jsonify({"error": str(e)}), 500
+            return render_template("predict.html", error=str(e))
 
         except Exception as e:
             logging.error(f"An unexpected error occurred: {e}")
-            return jsonify({"error": "An unexpected error occurred. Please check the logs for details."}), 500
+            return render_template("predict.html", error="An unexpected error occurred. Please check the logs for details.")
     else:
         return render_template("predict.html")
 
 
+
 if __name__ == '__main__':
-    # Set host and port if needed, e.g., host='0.0.0.0', port=5000
-    app.run(debug=True)
+    app.run(debug=False)

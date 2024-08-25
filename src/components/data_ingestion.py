@@ -29,8 +29,14 @@ class DataIngestion:
             data.to_csv(self.ingestion_config.raw_data_path, index=False)
             logging.info(" i have saved the raw dataset in artifact folder")
             
-            logging.info("here i have performed train test split")
             
+            
+            min_airline_count = 100  # Threshold for rare airlines
+            airline_counts = data['Airline'].value_counts()
+            rare_airlines = airline_counts[airline_counts < min_airline_count].index
+            data['Airline'] = data['Airline'].apply(lambda x: 'Other' if x in rare_airlines else x)
+
+            logging.info("here i have performed train test split")
             train_data,test_data=train_test_split(data,test_size=0.25, shuffle=True)
             logging.info("train test split completed")
             

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Training Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            width: 80%;
+            margin: 0 auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+            text-align: center;
+            padding: 8px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .button-container {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .button-container button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .button-container .predict-button {
+            background-color: #4CAF50; /* Green */
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Model Training Results</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>Model</th>
+                    <th>RMSE</th>
+                    <th>R2</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for model in model_scores %}
+                <tr>
+                    <td>{{ model['Model'] }}</td>
+                    <td>{{ model['RMSE'] }}</td>
+                    <td>{{ model['R2'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <h2>Best Model: {{ best_model_name }}</h2>
+        <p>R2 Score: {{ best_model_score }}</p>
+        
+        <!-- Button to redirect to Predict page -->
+        <div class="button-container">
+            <form action="/predict">
+                <button type="submit" class="predict-button">Predict</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -1,20 +1,18 @@
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 import os
 import sys
-import joblib  # Import joblib to save the scaler
+import joblib
 from src.logger import logging
 from src.exception import customexception
 from dataclasses import dataclass
 from src.components.data_ingestion import DataIngestion
 
-
 @dataclass
 class DataTransformationConfig:
     transformed_train_data_path: str = os.path.join("artifacts", "transformed_train.csv")
     transformed_test_data_path: str = os.path.join("artifacts", "transformed_test.csv")
-    preprocessor_obj_path: str = os.path.join("artifacts", "preprocessor.pkl")  # Path to save the preprocessor
-
+    preprocessor_obj_path: str = os.path.join("artifacts", "preprocessor.pkl")  
 
 class DataTransformation:
     def __init__(self):
@@ -29,7 +27,6 @@ class DataTransformation:
             test_df = pd.read_csv(test_data_path)
             logging.info("Loaded train and test data for transformation")
 
-            # Feature Engineering
             # Drop rows with missing values
             train_df.dropna(inplace=True)
             test_df.dropna(inplace=True)
@@ -74,42 +71,31 @@ class DataTransformation:
             train_df['Total_Stops'] = train_df['Total_Stops'].replace({'non-stop': 0, '1 stop': 1, '2 stops': 2, '3 stops': 3, '4 stops': 4})
             test_df['Total_Stops'] = test_df['Total_Stops'].replace({'non-stop': 0, '1 stop': 1, '2 stops': 2, '3 stops': 3, '4 stops': 4})
 
-            # Handle categorical features using pd.get_dummies
+
+            # Handle categorical features using Label Encoding
             categorical_features = ['Airline', 'Source', 'Destination']
             
-            # Train data
-            Airline_train = pd.get_dummies(train_df[['Airline']], drop_first=True, dtype=int)
-            Source_train = pd.get_dummies(train_df[['Source']], drop_first=True, dtype=int)
-            Destination_train = pd.get_dummies(train_df[['Destination']], drop_first=True, dtype=int)
+            label_encoders = {}
+            for feature in categorical_features:
+                label_encoder = LabelEncoder()
+                train_df[feature] = label_encoder.fit_transform(train_df[feature])
+                test_df[feature] = label_encoder.transform(test_df[feature])
+                label_encoders[feature] = label_encoder
             
-            # Test data
-            Airline_test = pd.get_dummies(test_df[['Airline']], drop_first=True, dtype=int)
-            Source_test = pd.get_dummies(test_df[['Source']], drop_first=True, dtype=int)
-            Destination_test = pd.get_dummies(test_df[['Destination']], drop_first=True, dtype=int)
-            
-            # Align the columns of train and test data
-            combined_columns = list(set(Airline_train.columns) | set(Airline_test.columns))
-            Airline_train = Airline_train.reindex(columns=combined_columns, fill_value=0)
-            Airline_test = Airline_test.reindex(columns=combined_columns, fill_value=0)
-            Source_train = Source_train.reindex(columns=combined_columns, fill_value=0)
-            Source_test = Source_test.reindex(columns=combined_columns, fill_value=0)
-            Destination_train = Destination_train.reindex(columns=combined_columns, fill_value=0)
-            Destination_test = Destination_test.reindex(columns=combined_columns, fill_value=0)
-
-            # Combine encoded features with original features
-            train_df = pd.concat([train_df.drop(categorical_features, axis=1), Airline_train, Source_train, Destination_train], axis=1)
-            test_df = pd.concat([test_df.drop(categorical_features, axis=1), Airline_test, Source_test, Destination_test], axis=1)
-
             # Standardizing the numerical features
             scaler = StandardScaler()
             numerical_features = ['Duration', 'Journey_Day', 'Journey_Month', 'Total_Stops']
             train_df[numerical_features] = scaler.fit_transform(train_df[numerical_features])
             test_df[numerical_features] = scaler.transform(test_df[numerical_features])
             
-            # Save the scaler (preprocessor)
+            # Save both label encoders and scaler together
+            preprocessor = {
+                'label_encoders': label_encoders,
+                'scaler': scaler
+            }
             os.makedirs(os.path.dirname(self.transformation_config.preprocessor_obj_path), exist_ok=True)
-            joblib.dump(scaler, self.transformation_config.preprocessor_obj_path)
-            logging.info("Preprocessor (scaler) saved successfully")
+            joblib.dump(preprocessor, self.transformation_config.preprocessor_obj_path)
+            logging.info("Preprocessor (LabelEncoders and scaler) saved successfully")
 
             # Save transformed data
             os.makedirs(os.path.dirname(self.transformation_config.transformed_train_data_path), exist_ok=True)
@@ -126,8 +112,3 @@ class DataTransformation:
         except Exception as e:
             logging.error("Exception occurred in initiate_data_transformation")
             raise customexception(e, sys)
-
-if __name__ == '__main__':
-    obj = DataTransformation()
-    train_data_path, test_data_path = DataIngestion().initiate_data_ingestion()
-    obj.initiate_data_transformation(train_data_path, test_data_path)

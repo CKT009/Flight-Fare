@@ -1,89 +1,107 @@
-# src/pipeline/prediction_pipeline.py
-
 import pandas as pd
 import joblib
-import os
-import sys
-from src.exception import customexception
 from src.logger import logging
+from src.exception import customexception
+import sys
 
 class PredictionPipeline:
-    def __init__(self, preprocessor_path, model_path):
-        self.preprocessor_path = preprocessor_path
+    def __init__(self, model_path: str, preprocessor_path: str):
         self.model_path = model_path
-        
-        self.preprocessor = self.load_object(self.preprocessor_path)
-        self.model = self.load_object(self.model_path)
+        self.preprocessor_path = preprocessor_path
+        self.model = self.load_model()
+        self.preprocessor = self.load_preprocessor()
 
-    def load_object(self, file_path):
-        """
-        Utility function to load a saved object using joblib
-        """
+    def load_model(self):
         try:
-            return joblib.load(file_path)
+            model = joblib.load(self.model_path)
+            logging.info("Model loaded successfully")
+            return model
         except Exception as e:
-            raise customexception(f"Error loading object from path: {file_path} - {e}", sys)
+            logging.error("Error loading model")
+            raise customexception("Error loading model", sys)
 
-    def preprocess_input(self, input_df):
-        """
-        Preprocess the input dataframe as per the training pipeline
-        """
+    def load_preprocessor(self):
         try:
-            
-            input_df['Journey_Day'] = pd.to_datetime(input_df['Date_of_Journey'], format='%d/%m/%Y').dt.day
-            input_df['Journey_Month'] = pd.to_datetime(input_df['Date_of_Journey'], format='%d/%m/%Y').dt.month
+            preprocessor = joblib.load(self.preprocessor_path)
+            logging.info("Preprocessor loaded successfully")
+            return preprocessor
+        except Exception as e:
+            logging.error("Error loading preprocessor")
+            raise customexception("Error loading preprocessor", sys)
 
-            # Convert 'Duration' to minutes
+    def preprocess_input(self, input_data: pd.DataFrame):
+        # Feature Engineering for prediction
+        try:
+            # Ensure column names match the expected format
+            #input_data.columns = [col.lower() for col in input_data.columns]
+
+            # Check if the necessary columns are present
+            required_columns = ['date_of_journey', 'Duration', 'Total_Stops', 'Airline', 'Source', 'Destination']
+            for col in required_columns:
+                if col not in input_data.columns:
+                    raise ValueError(f"Missing column in input data: {col}")
+
+            # Extract day and month from Date_of_Journey
+            input_data['Journey_Day'] = pd.to_datetime(input_data['date_of_journey'], format='%Y-%m-%d', errors='coerce').dt.day
+            input_data['Journey_Month'] = pd.to_datetime(input_data['date_of_journey'], format='%Y-%m-%d', errors='coerce').dt.month
+            input_data.drop(columns='date_of_journey', axis=1, inplace=True)
+            
+            # Convert 'Duration' to minutes (assuming duration is a string with 'h' and 'm' units)
             def convert_to_minutes(duration):
-                hours = 0
-                minutes = 0
-                if 'h' in duration:
-                    hours = int(duration.split('h')[0].strip())
-                    duration = duration.split('h')[1].strip()
-                if 'm' in duration:
-                    minutes = int(duration.split('m')[0].strip())
-                return hours * 60 + minutes
+                try:
+                    if pd.isna(duration):
+                        return None
+                    hours = 0
+                    minutes = 0
+                    if 'h' in duration:
+                        hours = int(duration.split('h')[0].strip())
+                        duration = duration.split('h')[1].strip()
+                    if 'm' in duration:
+                        minutes = int(duration.split('m')[0].strip())
+                    return hours * 60 + minutes
+                except:
+                    return None
 
-            input_df['Duration'] = input_df['Duration'].apply(convert_to_minutes)
-            
-            # Dropping unnecessary columns
-            
-            # Encode categorical features as in training
-            input_df['Total_Stops'] = input_df['Total_Stops'].replace({
-                'non-stop': 0, '1 stop': 1, '2 stops': 2, '3 stops': 3, '4 stops': 4
-            })
+            input_data['Duration'] = input_data['Duration']
 
-            # Handle categorical features using pd.get_dummies
-            categorical_features = ['Airline', 'Source', 'Destination']
-            input_df = pd.get_dummies(input_df, columns=categorical_features, drop_first=True)
-            
-            # Align columns with training set columns
-            input_df = input_df.reindex(columns=self.preprocessor.feature_names_in_, fill_value=0)
+            # Handle 'Total_Stops' as a numeric value
+            input_data['Total_Stops'] = input_data['Total_Stops'].replace({
+                'non-stop': 0, 
+                '1 stop': 1, 
+                '2 stops': 2, 
+                '3 stops': 3, 
+                '4 stops': 4
+            })            
 
-            # Scale the numerical features
+            # Standardize numerical features
             numerical_features = ['Duration', 'Journey_Day', 'Journey_Month', 'Total_Stops']
-            input_df[numerical_features] = self.preprocessor.transform(input_df[numerical_features])
+            input_data[numerical_features] = self.preprocessor['scaler'].transform(input_data[numerical_features])
+            logging.info("numerical done")
             
-            return input_df
+            categorical_features = ['Airline', 'Source', 'Destination']
+            for feature in categorical_features:
+                if feature in self.preprocessor['label_encoders']:
+                    label_encoder = self.preprocessor['label_encoders'][feature]
+                    input_data[feature] = label_encoder.transform(input_data[feature])
+                else:
+                    raise ValueError(f"Missing LabelEncoder for feature: {feature}")
 
+            return input_data
         except Exception as e:
-            logging.error(f"Error during preprocessing: {str(e)}")
-            raise customexception(e, sys)
+            logging.error("Error in preprocessing input data")
+            raise customexception("Error in preprocessing input data", sys)
 
-    def predict(self, input_data):
-        """
-        Make predictions on input data after preprocessing
-        """
+    def predict(self, input_data: dict):
         try:
-            # Preprocess the input data
-            processed_data = self.preprocess_input(input_data)
-
-            # Predict using the loaded model
-            predictions = self.model.predict(processed_data)
-
-            return predictions
-
+            input_df = pd.DataFrame([input_data])
+            logging.info(f"Input data for prediction: {input_df}")
+            
+            processed_data = self.preprocess_input(input_df)
+            logging.info(f"Preprocessed data: {processed_data}")
+            
+            prediction = self.model.predict(processed_data)
+            
+            return prediction
         except Exception as e:
-            logging.error(f"Exception occurred in prediction: {str(e)}")
-            raise customexception(e, sys)
-
+            logging.error("Error during prediction")
+            raise customexception("Error during prediction", sys)
