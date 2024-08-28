@@ -4,15 +4,14 @@ import sys
 import joblib
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor
 from xgboost import XGBRegressor
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_squared_error, r2_score
 from dataclasses import dataclass
 from src.logger import logging
 from src.exception import customexception
-from src.components.data_transformation import DataTransformation
-from src.components.data_ingestion import DataIngestion
 import numpy as np
 
 @dataclass
@@ -24,18 +23,11 @@ class ModelTrainer:
     def __init__(self):
         self.trainer_config = ModelTrainerConfig()
 
-    def fine_tune_model(self, model, X_train, y_train):
-        # Define hyperparameters for tuning
-        param_grid = {
-            'n_estimators': [100, 200, 500],
-            'max_depth': [3, 5, 7],
-            'learning_rate': [0.01, 0.1, 0.2]
-        }
-        
-        # Initialize GridSearchCV for XGBoost model
-        grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, scoring='r2')
+    def fine_tune_model(self, model, param_grid, X_train, y_train):
+        # Initialize GridSearchCV for each model
+        grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, scoring='r2', n_jobs=-1)
         grid_search.fit(X_train, y_train)
-        logging.info(f"Best parameters for XGBoost: {grid_search.best_params_}")
+        logging.info(f"Best parameters for {type(model).__name__}: {grid_search.best_params_}")
 
         return grid_search.best_estimator_
 
@@ -53,20 +45,42 @@ class ModelTrainer:
             X_test = test_df.drop(columns=['Price'])
             y_test = test_df['Price']
 
-            # Initialize models
+            # Initialize models and their hyperparameter grids
             models = {
-                "Linear Regression": LinearRegression(),
-                "Decision Tree": DecisionTreeRegressor(),
-                "Random Forest": RandomForestRegressor(),
-                "XGBoost": XGBRegressor(objective='reg:squarederror')
+                "Linear Regression": (LinearRegression(), {}),
+                "Decision Tree": (DecisionTreeRegressor(), {
+                    'max_depth': [3, 5, 7, None],
+                    'min_samples_split': [2, 5, 10]
+                }),
+                "Random Forest": (RandomForestRegressor(), {
+                    'n_estimators': [100, 200, 500],
+                    'max_depth': [3, 5, 7, None],
+                    'min_samples_split': [2, 5, 10]
+                }),
+                "XGBoost": (XGBRegressor(), {
+                    'n_estimators': [100, 200, 500],
+                    'max_depth': [3, 5, 7],
+                    'learning_rate': [0.01, 0.1, 0.2]
+                }),
+                "AdaBoost Regressor": (AdaBoostRegressor(), {
+                    'n_estimators': [50, 100, 200],
+                    'learning_rate': [0.01, 0.1, 1.0]
+                }),
+                "KNN Regressor": (KNeighborsRegressor(), {
+                    'n_neighbors': [3, 5, 7, 9],
+                    'weights': ['uniform', 'distance']
+                })
             }
-
             model_performance = []
 
-            # Train and evaluate models
-            for model_name, model in models.items():
-                logging.info(f"Training {model_name}")
-                model.fit(X_train, y_train)
+            # Train, fine-tune, and evaluate models
+            for model_name, (model, param_grid) in models.items():
+                logging.info(f"Training and tuning {model_name}")
+
+                if param_grid:  # Only fine-tune models with a defined parameter grid
+                    model = self.fine_tune_model(model, param_grid, X_train, y_train)
+                else:
+                    model.fit(X_train, y_train)
 
                 # Predict on test data
                 y_pred = model.predict(X_test)
@@ -90,15 +104,11 @@ class ModelTrainer:
             performance_df.to_csv(self.trainer_config.model_scores_file_path, index=False)  # Ensure 'Model' column is saved
 
             best_model_name = performance_df.loc[performance_df['R2'].idxmax(), 'Model']
-            best_model = models[best_model_name]
+            best_model = models[best_model_name][0]  # Get the best model instance after tuning
 
             logging.info(f"Best model selected: {best_model_name} with R2: {performance_df.loc[performance_df['R2'].idxmax(), 'R2']}")
             print(f"Best model name: {best_model_name} and R2 score: {performance_df.loc[performance_df['R2'].idxmax(), 'R2']}")
 
-            if best_model_name == "XGBoost":
-                best_model = self.fine_tune_model(best_model, X_train, y_train)
-                
-            # Save the best model
             os.makedirs(os.path.dirname(self.trainer_config.trained_model_file_path), exist_ok=True)
             joblib.dump(best_model, self.trainer_config.trained_model_file_path)
 

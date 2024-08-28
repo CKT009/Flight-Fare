@@ -39,8 +39,8 @@ def predict():
     if request.method == 'POST':
         try:
             # Load the model and preprocessor
-            model_path = "artifacts/best_model.pkl"  # Adjust path as needed
-            preprocessor_path = "artifacts/preprocessor.pkl"  # Adjust path as needed
+            model_path = "artifacts/best_model.pkl"  
+            preprocessor_path = "artifacts/preprocessor.pkl"
             prediction_pipeline = PredictionPipeline(model_path, preprocessor_path)
 
             # Get input data from form
@@ -72,4 +72,4 @@ def predict():
 
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=True)

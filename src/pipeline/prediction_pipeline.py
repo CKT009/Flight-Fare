@@ -30,23 +30,17 @@ class PredictionPipeline:
             raise customexception("Error loading preprocessor", sys)
 
     def preprocess_input(self, input_data: pd.DataFrame):
-        # Feature Engineering for prediction
         try:
-            # Ensure column names match the expected format
-            #input_data.columns = [col.lower() for col in input_data.columns]
 
-            # Check if the necessary columns are present
             required_columns = ['date_of_journey', 'Duration', 'Total_Stops', 'Airline', 'Source', 'Destination']
             for col in required_columns:
                 if col not in input_data.columns:
                     raise ValueError(f"Missing column in input data: {col}")
 
-            # Extract day and month from Date_of_Journey
             input_data['Journey_Day'] = pd.to_datetime(input_data['date_of_journey'], format='%Y-%m-%d', errors='coerce').dt.day
             input_data['Journey_Month'] = pd.to_datetime(input_data['date_of_journey'], format='%Y-%m-%d', errors='coerce').dt.month
             input_data.drop(columns='date_of_journey', axis=1, inplace=True)
             
-            # Convert 'Duration' to minutes (assuming duration is a string with 'h' and 'm' units)
             def convert_to_minutes(duration):
                 try:
                     if pd.isna(duration):
@@ -63,8 +57,6 @@ class PredictionPipeline:
                     return None
 
             input_data['Duration'] = input_data['Duration']
-
-            # Handle 'Total_Stops' as a numeric value
             input_data['Total_Stops'] = input_data['Total_Stops'].replace({
                 'non-stop': 0, 
                 '1 stop': 1, 
@@ -73,7 +65,6 @@ class PredictionPipeline:
                 '4 stops': 4
             })            
 
-            # Standardize numerical features
             numerical_features = ['Duration', 'Journey_Day', 'Journey_Month', 'Total_Stops']
             input_data[numerical_features] = self.preprocessor['scaler'].transform(input_data[numerical_features])
             logging.info("numerical done")
@@ -99,9 +90,12 @@ class PredictionPipeline:
             processed_data = self.preprocess_input(input_df)
             logging.info(f"Preprocessed data: {processed_data}")
             
+            if not hasattr(self.model, 'predict'):
+                raise ValueError("Loaded model is not callable or does not have a predict method.")
             prediction = self.model.predict(processed_data)
+            logging.info(f"Prediction: {prediction}")
             
             return prediction
         except Exception as e:
-            logging.error("Error during prediction")
+            logging.error(f"Error during prediction: {e}")
             raise customexception("Error during prediction", sys)
