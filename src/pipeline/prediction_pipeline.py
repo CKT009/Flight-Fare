@@ -14,6 +14,7 @@ class PredictionPipeline:
     def load_model(self):
         try:
             model = joblib.load(self.model_path)
+            assert hasattr(model, 'predict'), "Model is not in a state to predict"
             logging.info("Model loaded successfully")
             return model
         except Exception as e:
@@ -92,6 +93,9 @@ class PredictionPipeline:
             
             if not hasattr(self.model, 'predict'):
                 raise ValueError("Loaded model is not callable or does not have a predict method.")
+            
+            logging.info(f"Using model of type {type(self.model)} for prediction")
+            
             prediction = self.model.predict(processed_data)
             logging.info(f"Prediction: {prediction}")
             

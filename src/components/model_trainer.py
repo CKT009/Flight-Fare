@@ -77,15 +77,13 @@ class ModelTrainer:
             for model_name, (model, param_grid) in models.items():
                 logging.info(f"Training and tuning {model_name}")
 
-                if param_grid:  # Only fine-tune models with a defined parameter grid
+                if param_grid: 
                     model = self.fine_tune_model(model, param_grid, X_train, y_train)
                 else:
                     model.fit(X_train, y_train)
 
-                # Predict on test data
                 y_pred = model.predict(X_test)
 
-                # Evaluate model
                 mse = mean_squared_error(y_test, y_pred)
                 rmse = np.sqrt(mse)
                 r2 = r2_score(y_test, y_pred)
@@ -101,14 +99,17 @@ class ModelTrainer:
 
             performance_df = pd.DataFrame(model_performance)
             os.makedirs(os.path.dirname(self.trainer_config.model_scores_file_path), exist_ok=True)
-            performance_df.to_csv(self.trainer_config.model_scores_file_path, index=False)  # Ensure 'Model' column is saved
+            performance_df.to_csv(self.trainer_config.model_scores_file_path, index=False)
 
             best_model_name = performance_df.loc[performance_df['R2'].idxmax(), 'Model']
-            best_model = models[best_model_name][0]  # Get the best model instance after tuning
+            best_model = models[best_model_name][0]  # Ensure this is the best trained model instance
+            
+            best_model.fit(X_train, y_train)
 
             logging.info(f"Best model selected: {best_model_name} with R2: {performance_df.loc[performance_df['R2'].idxmax(), 'R2']}")
             print(f"Best model name: {best_model_name} and R2 score: {performance_df.loc[performance_df['R2'].idxmax(), 'R2']}")
 
+            # Correctly save the fully trained best model
             os.makedirs(os.path.dirname(self.trainer_config.trained_model_file_path), exist_ok=True)
             joblib.dump(best_model, self.trainer_config.trained_model_file_path)
 
@@ -119,3 +120,4 @@ class ModelTrainer:
         except Exception as e:
             logging.error("Exception occurred in initiate_model_training")
             raise customexception(e, sys)
+
